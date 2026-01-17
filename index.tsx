@@ -351,7 +351,7 @@ const App = () => {
             className="select-none overflow-visible"
             style={{ minWidth: '100%', minHeight: '100%' }}
           >
-            {/* 100 * 0.4 = 40 (60% Verschiebung nach links/oben bedeutet 40% verbleibend) */}
+            {/* Startposition (40, 40) fixiert den Root-Node Deutschland weiter oben/links */}
             <g transform={`translate(40, 40) scale(${scale})`}>
               {layoutNodes.links.map((link, i) => (
                 <path key={i} d={`M ${link.x1} ${link.y1} C ${link.x1 + 140} ${link.y1}, ${link.x2 - 140} ${link.y2}, ${link.x2} ${link.y2}`} fill="none" stroke={isDark ? "white" : "#cbd5e1"} strokeWidth="1" className="opacity-10" />
