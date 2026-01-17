@@ -1,6 +1,18 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { NUTS_DATA, THEMES } from './data';
+import { getStatsForId } from './statistik';
+
+// Hilfsfunktion zur Formatierung der Einwohnerzahl
+const formatPop = (pop: number) => {
+  if (pop < 1000) return `${pop.toLocaleString()} K`;
+  return `${(pop / 1000).toFixed(2)} Mio.`;
+};
+
+// Verbessertes getExtraInfo nutzt jetzt die statistik.ts
+const getExtraInfo = (node: any) => {
+  return getStatsForId(node.id, node.pop);
+};
 
 const MindmapNode = ({ node, x, y, onSelect, isSelected, isExpanded, onToggle, isHighlighted, visible, setHoveredNode, theme }: any) => {
   if (!visible) return null;
@@ -94,6 +106,22 @@ const App = () => {
       else next.add(id);
       return next;
     });
+  };
+
+  const expandAll = () => {
+    const newExpanded = new Set<string>();
+    const traverse = (node: any) => {
+      if (node.children && node.children.length > 0) {
+        newExpanded.add(node.id);
+        node.children.forEach(traverse);
+      }
+    };
+    traverse(NUTS_DATA);
+    setExpandedIds(newExpanded);
+  };
+
+  const collapseAll = () => {
+    setExpandedIds(new Set(["DE"]));
   };
 
   const onWheel = (e: React.WheelEvent) => {
@@ -251,15 +279,33 @@ const App = () => {
               />
             </div>
             <div className="flex gap-2">
-              {[1, 2, 3].map(lvl => (
+              <div className="flex flex-1 gap-1">
+                {[1, 2, 3].map(lvl => (
+                  <button
+                    key={lvl}
+                    onClick={() => expandToLevel(lvl)}
+                    className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all border ${isDark ? 'bg-white/5 border-white/10 hover:bg-white/10 text-slate-400' : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-600'}`}
+                  >
+                    E{lvl}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1">
                 <button
-                  key={lvl}
-                  onClick={() => expandToLevel(lvl)}
-                  className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all border ${isDark ? 'bg-white/5 border-white/10 hover:bg-white/10 text-slate-400' : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-600'}`}
+                  onClick={expandAll}
+                  title="Alle aufklappen"
+                  className={`w-9 py-2 rounded-lg flex items-center justify-center transition-all border ${isDark ? 'bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-50 border-blue-100 text-blue-600 hover:bg-blue-100'}`}
                 >
-                  E{lvl}
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
                 </button>
-              ))}
+                <button
+                  onClick={collapseAll}
+                  title="Alle zuklappen"
+                  className={`w-9 py-2 rounded-lg flex items-center justify-center transition-all border ${isDark ? 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 12H4" /></svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -269,9 +315,12 @@ const App = () => {
             <div className={`rounded-2xl p-4 border transition-all ${isDark ? 'bg-white/10 border-white/10' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
               <div className="text-[9px] font-bold text-blue-500 uppercase mb-1">{selectedNode.id}</div>
               <h2 className={`text-base font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{selectedNode.name}</h2>
-              {selectedNode.pop && (
-                <div className="mt-2 text-[10px] font-bold opacity-60">~ {(selectedNode.pop * 1000).toLocaleString()} Einwohner</div>
-              )}
+              <div className="mt-2 flex flex-col gap-0.5">
+                <div className="text-[10px] font-bold opacity-60">{formatPop(getExtraInfo(selectedNode).pop)} Einwohner</div>
+                <div className="text-[9px] font-medium text-slate-400">
+                  Fläche: {getExtraInfo(selectedNode).area.toLocaleString()} km² • Ø Einkommen: {getExtraInfo(selectedNode).income.toLocaleString()} €
+                </div>
+              </div>
             </div>
           )}
           <section className={`rounded-2xl border overflow-hidden ${isDark ? 'bg-black/20 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
@@ -341,8 +390,11 @@ const App = () => {
         >
           {hoveredNode && (
             <div className={`fixed z-50 pointer-events-none backdrop-blur-md border p-3 rounded-xl shadow-2xl ${isDark ? 'bg-slate-900/90 border-white/20' : 'bg-white/90 border-slate-200 shadow-xl'}`} style={{ left: hoveredNode.x + 20, top: hoveredNode.y - 40 }}>
-              <div className="text-[10px] font-bold text-blue-500 mb-1">{hoveredNode.node.id}</div>
+              <div className="text-[10px] font-bold text-blue-500 mb-0.5">{hoveredNode.node.id}</div>
               <div className={`text-xs font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{hoveredNode.node.name}</div>
+              <div className="text-[9px] font-medium text-slate-400 mt-1">
+                {formatPop(getExtraInfo(hoveredNode.node).pop)} • {getExtraInfo(hoveredNode.node).area.toLocaleString()} km² • {getExtraInfo(hoveredNode.node).income.toLocaleString()} €
+              </div>
             </div>
           )}
           <svg 
@@ -351,7 +403,6 @@ const App = () => {
             className="select-none overflow-visible"
             style={{ minWidth: '100%', minHeight: '100%' }}
           >
-            {/* Startposition (40, 40) fixiert den Root-Node Deutschland weiter oben/links */}
             <g transform={`translate(40, 40) scale(${scale})`}>
               {layoutNodes.links.map((link, i) => (
                 <path key={i} d={`M ${link.x1} ${link.y1} C ${link.x1 + 140} ${link.y1}, ${link.x2 - 140} ${link.y2}, ${link.x2} ${link.y2}`} fill="none" stroke={isDark ? "white" : "#cbd5e1"} strokeWidth="1" className="opacity-10" />
