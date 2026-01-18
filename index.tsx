@@ -69,7 +69,7 @@ const App = () => {
     if (!node) return;
     setSearchError(null);
     
-    // 1. Pfad zum Knoten finden und alle Eltern ausklappen
+    // Pfad zum Knoten finden und alle Eltern ausklappen
     const newExpanded = new Set(expandedIds);
     const findAndExpand = (curr: NutsNode, targetId: string): boolean => {
       if (curr.id === targetId) return true;
@@ -85,19 +85,15 @@ const App = () => {
     };
     findAndExpand(NUTS_DATA, node.id);
     
-    // UI Update
     setExpandedIds(newExpanded);
     setSelectedNode(node);
     setShowFullHierarchy(true); 
 
-    // 2. Scroll-Logik (Kurze Verzögerung für DOM Updates/Expansion)
     setTimeout(() => {
-      // Zentrieren im Mindmap
       document.querySelector(`[data-node-id="${node.id}"]`)?.scrollIntoView({ 
         behavior: 'smooth', block: 'center', inline: 'center' 
       });
       
-      // Fokussieren in der Strukturübersicht (Sidebar)
       const sidebarItem = document.getElementById(`sidebar-item-${node.id}`);
       if (sidebarItem) {
         sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -204,8 +200,10 @@ const App = () => {
               <h2 className="text-lg font-bold mb-3 leading-tight">{selectedNode.name}</h2>
               <div className="text-[11px] space-y-1.5 opacity-70 border-t border-slate-500/10 pt-3">
                 <div className="flex justify-between"><span>Ebene:</span><span className="font-bold">NUTS {selectedNode.level}</span></div>
-                <div className="flex justify-between"><span>Einwohner:</span><span className="font-bold text-blue-400">{formatPop(nodeStats?.pop || 0) || 'k.A.'}</span></div>
-                {nodeStats?.area > 0 && <div className="flex justify-between"><span>Fläche:</span><span className="font-bold">{nodeStats.area.toLocaleString()} km²</span></div>}
+                <div className="flex justify-between"><span>Einwohner:</span><span className="font-bold text-blue-400">{formatPop(nodeStats ? nodeStats.pop : 0) || 'k.A.'}</span></div>
+                {nodeStats && typeof nodeStats.area === 'number' && nodeStats.area > 0 && (
+                   <div className="flex justify-between"><span>Fläche:</span><span className="font-bold">{nodeStats.area.toLocaleString()} km²</span></div>
+                )}
               </div>
             </div>
           )}
