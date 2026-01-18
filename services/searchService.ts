@@ -6,6 +6,7 @@ export interface SearchResult {
   node: NutsNode | null;
   type: 'plz' | 'text' | 'id' | 'fuzzy';
   error?: string;
+  debugInfo?: string;
 }
 
 const normalizeText = (text: string): string => {
@@ -34,19 +35,17 @@ export const searchService = {
     const lowerQuery = query.toLowerCase().trim();
     const normalizedQuery = normalizeText(query);
 
-    // 1. Exakte ID Suche (Case Insensitive)
+    console.log(`[searchService] Suche '${lowerQuery}' in ${allNodes.length} Knoten...`);
+
     const idMatch = allNodes.find(n => n.id.toLowerCase() === lowerQuery);
     if (idMatch) return { node: idMatch, type: 'id' };
 
-    // 2. Exakter Name Suche
     const exactNameMatch = allNodes.find(n => n.name.toLowerCase() === lowerQuery);
     if (exactNameMatch) return { node: exactNameMatch, type: 'text' };
 
-    // 3. Teilübereinstimmung (Normalisiert)
     const partialMatches = allNodes
       .filter(n => normalizeText(n.name).includes(normalizedQuery))
       .sort((a, b) => {
-        // Kürzere Namen oder niedrigere Ebenen bevorzugen
         if (a.level !== b.level) return a.level - b.level;
         return a.name.length - b.name.length;
       });
@@ -60,30 +59,41 @@ export const searchService = {
 
   async findRegion(query: string): Promise<SearchResult> {
     const trimmed = query.trim();
+    console.log(`--- [searchService] Neue Suche: "${trimmed}" ---`);
+
     if (trimmed.length < 2) return { node: null, type: 'text' };
 
     // 1. PLZ Logik
     if (/^\d{5}$/.test(trimmed)) {
+      console.log("[searchService] PLZ-Format erkannt.");
       try {
         const nutsCode = await plzService.getNuts3Code(trimmed);
         if (nutsCode) {
-          // Wir haben einen NUTS-Code aus der Datei, jetzt suchen wir den Knoten dazu
+          console.log(`[searchService] PLZ ${trimmed} zu NUTS ${nutsCode} aufgelöst.`);
           const match = this.findBestMatch(nutsCode);
-          if (match.node) return { node: match.node, type: 'plz' };
+          if (match.node) {
+            console.log(`[searchService] Knoten ${match.node.id} (${match.node.name}) gefunden.`);
+            return { node: match.node, type: 'plz' };
+          } else {
+            console.error(`[searchService] Code ${nutsCode} existiert nicht im NUTS_DATA Baum!`);
+            return { node: null, type: 'plz', error: `Code ${nutsCode} wurde im Datenbaum nicht gefunden.` };
+          }
         } else {
-          // PLZ im Mapping nicht gefunden
-          return { node: null, type: 'plz', error: `Die PLZ ${trimmed} ist im NUTS-Mapping 2024 nicht enthalten.` };
+          console.warn("[searchService] PLZ im Mapping nicht vorhanden.");
         }
       } catch (e) {
-        console.warn("PLZ Lookup failed, check file availability");
+        console.error("[searchService] Fehler bei PLZ-Suche:", e);
       }
     }
 
-    // 2. Text/Fuzzy Suche als Fallback
+    // 2. Text/Fuzzy Suche
     const result = this.findBestMatch(trimmed);
     if (!result.node) {
+      console.warn(`[searchService] Kein Text-Treffer für "${trimmed}"`);
       return { node: null, type: 'text', error: `Kein Treffer für '${trimmed}' gefunden.` };
     }
+    
+    console.log(`[searchService] Text-Treffer: ${result.node.name} (${result.type})`);
     return { node: result.node, type: result.type };
   }
 };

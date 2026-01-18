@@ -1,3 +1,4 @@
+
 const Path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
@@ -30,8 +31,16 @@ module.exports = {
     }),
   ],
   devServer: {
-    static: './dist',
+    static: [
+      {
+        directory: Path.join(__dirname, '/'),
+      },
+      {
+        directory: Path.join(__dirname, 'dist'),
+      }
+    ],
     port: 5173,
     hot: true,
+    historyApiFallback: true,
   },
 };
