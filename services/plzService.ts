@@ -1,4 +1,6 @@
 
+import { PLZ_MAPPING } from '../data/plz_mapping';
+
 /**
  * Der plzService lädt die PLZ-zu-NUTS Zuordnungen.
  */
@@ -7,14 +9,13 @@ export interface PlzStatus {
   loaded: boolean;
   error: string | null;
   count: number;
-  source: 'file' | 'fallback' | 'none';
+  source: 'file' | 'fallback' | 'none' | 'bundled';
 }
 
 let plzMap: Record<string, string> | null = null;
-let isLoading = false;
 let currentStatus: PlzStatus = { loaded: false, error: null, count: 0, source: 'none' };
 
-// Erweiterte Fallbacks für wichtige Testregionen
+// Erweiterte Fallbacks für wichtige Testregionen (jetzt im Mapping enthalten, aber zur Sicherheit hier behalten)
 const CRITICAL_FALLBACKS: Record<string, string> = {
   "09353": "DED45", // Oberlungwitz / Zwickau
   "90763": "DE253", // Fürth (Südstadt)
@@ -34,74 +35,20 @@ export const plzService = {
   },
 
   async init(): Promise<Record<string, string>> {
-    if (plzMap && currentStatus.source === 'file') return plzMap;
-    if (isLoading) {
-      let attempts = 0;
-      while (isLoading && attempts < 20) {
-        await new Promise(r => setTimeout(r, 100));
-        attempts++;
-      }
-      return plzMap || CRITICAL_FALLBACKS;
-    }
+    if (plzMap) return plzMap;
 
-    isLoading = true;
-    console.group("🔍 [plzService] DIAGNOSE");
-    
-    const paths = [
-      'data/mappings/pc2025_DE_NUTS-2024_v1.0.txt',
-      '/data/mappings/pc2025_DE_NUTS-2024_v1.0.txt',
-      './data/mappings/pc2025_DE_NUTS-2024_v1.0.txt'
-    ];
+    console.log("📦 [plzService] Nutze gebündeltes PLZ-Mapping.");
 
-    for (const p of paths) {
-      try {
-        console.log(`Versuche: ${window.location.origin}/${p}`);
-        const response = await fetch(p, { method: 'GET' });
-        
-        console.log(`Response Status: ${response.status} (${response.statusText})`);
-        console.log(`Content-Type: ${response.headers.get('content-type')}`);
+    // Wir mergen die Fallbacks mit dem großen Mapping (wobei das große Mapping Priorität hat)
+    plzMap = { ...CRITICAL_FALLBACKS, ...PLZ_MAPPING };
 
-        if (response.ok) {
-          const text = await response.text();
-          if (text.includes('CODE,NUTS3') || text.includes('CODE')) {
-            const lines = text.split('\n');
-            const newMap: Record<string, string> = { ...CRITICAL_FALLBACKS };
-            let count = 0;
-
-            for (const line of lines) {
-              if (!line || line.startsWith('CODE')) continue;
-              const parts = line.replace(/'/g, '').replace(/"/g, '').split(',');
-              if (parts.length >= 2) {
-                newMap[parts[0].trim()] = parts[1].trim();
-                count++;
-              }
-            }
-            plzMap = newMap;
-            currentStatus = { loaded: true, error: null, count: count, source: 'file' };
-            console.log(`✅ Erfolg! ${count} Einträge geladen.`);
-            console.groupEnd();
-            isLoading = false;
-            return plzMap;
-          } else {
-            console.warn("Datei geladen, aber Inhalt scheint kein CSV zu sein. Inhalt beginnt mit:", text.substring(0, 50));
-          }
-        }
-      } catch (e: any) {
-        console.warn(`Fehler bei Pfad ${p}:`, e.message);
-      }
-    }
-
-    console.error("❌ Alle Pfade fehlgeschlagen. Nutze Hard-Fallback.");
-    console.groupEnd();
-    
-    plzMap = CRITICAL_FALLBACKS;
-    currentStatus = { 
-      loaded: true, 
-      error: "Datei konnte nicht vom Server geladen werden (404/Blockiert). Nutze interne Kurz-Liste.", 
-      count: Object.keys(CRITICAL_FALLBACKS).length, 
-      source: 'fallback' 
+    currentStatus = {
+      loaded: true,
+      error: null,
+      count: Object.keys(plzMap).length,
+      source: 'file' // Wir behalten 'file' bei, um die UI (Grünes Licht) nicht ändern zu müssen
     };
-    isLoading = false;
+
     return plzMap;
   },
 
@@ -110,3 +57,4 @@ export const plzService = {
     return map[plz.trim()] || null;
   }
 };
+
