@@ -1,3 +1,13 @@
+
+export interface NutsNode {
+  id: string;
+  name: string;
+  level: number;
+  pop: number;
+  children?: NutsNode[];
+}
+
+
 export const THEMES = [
   { id: 'slate', name: 'Slate Night', bg: 'bg-slate-950', accent: 'blue' },
   { id: 'midnight', name: 'Deep Space', bg: 'bg-[#020617]', accent: 'indigo' },
@@ -8,7 +18,7 @@ export const THEMES = [
   { id: 'white', name: 'Clean White', bg: 'bg-slate-50', accent: 'slate' },
 ];
 
-export const NUTS_DATA = {
+export const NUTS_DATA: NutsNode = {
   id: "DE", name: "Deutschland", level: 0, pop: 84400,
   children: [
     { id: "DE1", name: "Baden-Württemberg", level: 1, pop: 11280, children: [
