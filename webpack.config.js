@@ -48,7 +48,8 @@ module.exports = {
       }
     ],
     port: 5173,
-    hot: true,
+    hot: false,
+    liveReload: false,
     historyApiFallback: true,
   },
   watchOptions: {

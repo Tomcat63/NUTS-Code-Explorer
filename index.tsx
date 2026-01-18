@@ -23,11 +23,17 @@ const App = () => {
   const [selectedNode, setSelectedNode] = useState<NutsNode | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [plzStatus, setPlzStatus] = useState<PlzStatus>(plzService.getStatus());
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(["DE", "DE2", "DE25"]));
-  const [searchTerm, setSearchTerm] = useState("Nürnberg");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('nuts_expanded_ids');
+    return saved ? new Set(JSON.parse(saved)) : new Set(["DE", "DE2", "DE25"]);
+  });
+  const [searchTerm, setSearchTerm] = useState("");
   const [scale, setScale] = useState(0.85);
   const [showFullHierarchy, setShowFullHierarchy] = useState(true);
-  const [currentTheme, setCurrentTheme] = useState(APP_THEMES[0]);
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    const saved = localStorage.getItem('nuts_theme_id');
+    return APP_THEMES.find(t => t.id === saved) || APP_THEMES[0];
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [showWikiPanel, setShowWikiPanel] = useState(true);
   const [hasSearchResult, setHasSearchResult] = useState(false);
@@ -88,6 +94,7 @@ const App = () => {
     setSelectedNode(node);
     setShowFullHierarchy(true);
     setHasSearchResult(true);
+    setActiveTab('info');
 
     setTimeout(() => {
       document.querySelector(`[data-node-id="${node.id}"]`)?.scrollIntoView({
@@ -102,12 +109,45 @@ const App = () => {
     const init = async () => {
       await plzService.init();
       setPlzStatus(plzService.getStatus());
-      const res = await searchService.findBestMatch("Nürnberg");
-      if (res.node) selectAndCenter(res.node);
-      // runDiagnostics();
+
+      // Load last node from storage
+      const lastId = localStorage.getItem('nuts_last_node_id');
+      if (lastId) {
+        const findNode = (curr: NutsNode): NutsNode | null => {
+          if (curr.id === lastId) return curr;
+          if (curr.children) {
+            for (const c of curr.children) {
+              const found = findNode(c);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const node = findNode(NUTS_DATA);
+        if (node) selectAndCenter(node);
+      } else {
+        // Default to Nürnberg if nothing saved
+        const res = await searchService.findBestMatch("Nürnberg");
+        if (res.node) selectAndCenter(res.node);
+      }
     };
     init();
   }, []);
+
+  // Save state to localStorage on changes
+  useEffect(() => {
+    localStorage.setItem('nuts_expanded_ids', JSON.stringify(Array.from(expandedIds)));
+  }, [expandedIds]);
+
+  useEffect(() => {
+    localStorage.setItem('nuts_theme_id', currentTheme.id);
+  }, [currentTheme]);
+
+  useEffect(() => {
+    if (selectedNode) {
+      localStorage.setItem('nuts_last_node_id', selectedNode.id);
+    }
+  }, [selectedNode]);
 
   const totalNutsCount = useMemo(() => {
     let count = 0;
