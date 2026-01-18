@@ -41,6 +41,10 @@ module.exports = {
       },
       {
         directory: Path.join(__dirname, 'dist'),
+      },
+      {
+        directory: Path.join(__dirname, 'media'),
+        publicPath: '/media',
       }
     ],
     port: 5173,
@@ -48,6 +52,6 @@ module.exports = {
     historyApiFallback: true,
   },
   watchOptions: {
-    ignored: ['**/node_modules', '**/*.md', '**/dist', '**/assets'],
+    ignored: /node_modules|dist|assets|media|\.md$/,
   },
 };
