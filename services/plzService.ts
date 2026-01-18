@@ -3,26 +3,39 @@
  * Der plzService lädt die PLZ-zu-NUTS Zuordnungen.
  */
 
+export interface PlzStatus {
+  loaded: boolean;
+  error: string | null;
+  count: number;
+  source: 'file' | 'fallback' | 'none';
+}
+
 let plzMap: Record<string, string> | null = null;
 let isLoading = false;
-let loadFailed = false;
+let currentStatus: PlzStatus = { loaded: false, error: null, count: 0, source: 'none' };
 
-// Fallback für Tests, falls die Datei vom Server blockiert wird
+// Erweiterte Fallbacks für wichtige Testregionen
 const CRITICAL_FALLBACKS: Record<string, string> = {
   "09353": "DED45", // Oberlungwitz / Zwickau
+  "90763": "DE253", // Fürth (Südstadt)
+  "90762": "DE253", // Fürth (Zentrum)
   "80331": "DE212", // München
   "10115": "DE300", // Berlin
   "20095": "DE600", // Hamburg
   "60311": "DE712", // Frankfurt
   "70173": "DE111", // Stuttgart
-  "50667": "DEA23"  // Köln
+  "50667": "DEA23", // Köln
+  "01067": "DED21"  // Dresden
 };
 
 export const plzService = {
+  getStatus(): PlzStatus {
+    return currentStatus;
+  },
+
   async init(): Promise<Record<string, string>> {
-    if (plzMap) return plzMap;
+    if (plzMap && currentStatus.source === 'file') return plzMap;
     if (isLoading) {
-      console.log("[plzService] Warte auf laufenden Ladevorgang...");
       let attempts = 0;
       while (isLoading && attempts < 20) {
         await new Promise(r => setTimeout(r, 100));
@@ -32,75 +45,68 @@ export const plzService = {
     }
 
     isLoading = true;
-    console.group("🚀 [plzService] Initialisierung");
+    console.group("🔍 [plzService] DIAGNOSE");
     
-    // Wir versuchen verschiedene Pfade für Webpack/Vite Kompatibilität
     const paths = [
-      './data/mappings/pc2025_DE_NUTS-2024_v1.0.txt',
       'data/mappings/pc2025_DE_NUTS-2024_v1.0.txt',
-      '/data/mappings/pc2025_DE_NUTS-2024_v1.0.txt'
+      '/data/mappings/pc2025_DE_NUTS-2024_v1.0.txt',
+      './data/mappings/pc2025_DE_NUTS-2024_v1.0.txt'
     ];
-
-    let lastError = "";
 
     for (const p of paths) {
       try {
-        console.log(`[plzService] Versuche Pfad: ${p}`);
-        const response = await fetch(p, { method: 'GET', cache: 'no-cache' });
+        console.log(`Versuche: ${window.location.origin}/${p}`);
+        const response = await fetch(p, { method: 'GET' });
         
-        if (response.ok) {
-          console.log(`✅ [plzService] Datei unter ${p} gefunden.`);
-          const text = await response.text();
-          const lines = text.split('\n');
-          const newMap: Record<string, string> = { ...CRITICAL_FALLBACKS };
-          let count = 0;
+        console.log(`Response Status: ${response.status} (${response.statusText})`);
+        console.log(`Content-Type: ${response.headers.get('content-type')}`);
 
-          for (const line of lines) {
-            if (!line || line.startsWith('CODE')) continue;
-            const parts = line.replace(/'/g, '').replace(/"/g, '').split(',');
-            if (parts.length >= 2) {
-              const plz = parts[0].trim();
-              const nuts = parts[1].trim();
-              newMap[plz] = nuts;
-              count++;
+        if (response.ok) {
+          const text = await response.text();
+          if (text.includes('CODE,NUTS3') || text.includes('CODE')) {
+            const lines = text.split('\n');
+            const newMap: Record<string, string> = { ...CRITICAL_FALLBACKS };
+            let count = 0;
+
+            for (const line of lines) {
+              if (!line || line.startsWith('CODE')) continue;
+              const parts = line.replace(/'/g, '').replace(/"/g, '').split(',');
+              if (parts.length >= 2) {
+                newMap[parts[0].trim()] = parts[1].trim();
+                count++;
+              }
             }
+            plzMap = newMap;
+            currentStatus = { loaded: true, error: null, count: count, source: 'file' };
+            console.log(`✅ Erfolg! ${count} Einträge geladen.`);
+            console.groupEnd();
+            isLoading = false;
+            return plzMap;
+          } else {
+            console.warn("Datei geladen, aber Inhalt scheint kein CSV zu sein. Inhalt beginnt mit:", text.substring(0, 50));
           }
-          plzMap = newMap;
-          console.log(`[plzService] ${count} Mappings erfolgreich parsiert.`);
-          console.groupEnd();
-          return plzMap;
-        } else {
-          console.warn(`[plzService] Pfad ${p} lieferte Status: ${response.status}`);
-          lastError = `Status ${response.status}`;
         }
       } catch (e: any) {
-        console.warn(`[plzService] Fehler bei Pfad ${p}:`, e.message);
-        lastError = e.message;
+        console.warn(`Fehler bei Pfad ${p}:`, e.message);
       }
     }
 
-    console.error("[plzService] Mapping-Datei konnte nicht geladen werden. Nutze Minimal-Fallback.");
-    console.log("[plzService] Möglicher Grund: Webpack liefert .txt Dateien nicht aus. Prüfe webpack.config.js (static).");
+    console.error("❌ Alle Pfade fehlgeschlagen. Nutze Hard-Fallback.");
     console.groupEnd();
     
-    loadFailed = true;
     plzMap = CRITICAL_FALLBACKS;
+    currentStatus = { 
+      loaded: true, 
+      error: "Datei konnte nicht vom Server geladen werden (404/Blockiert). Nutze interne Kurz-Liste.", 
+      count: Object.keys(CRITICAL_FALLBACKS).length, 
+      source: 'fallback' 
+    };
+    isLoading = false;
     return plzMap;
   },
 
   async getNuts3Code(plz: string): Promise<string | null> {
-    const cleanPlz = plz.trim();
-    console.log(`[plzService] Suche NUTS-Code für PLZ: ${cleanPlz}`);
-    
     const map = await this.init();
-    const result = map[cleanPlz] || null;
-    
-    if (result) {
-      console.log(`[plzService] Treffer: ${cleanPlz} -> ${result}`);
-    } else {
-      console.warn(`[plzService] Kein Treffer für PLZ ${cleanPlz}`);
-    }
-    
-    return result;
+    return map[plz.trim()] || null;
   }
 };

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { NUTS_DATA } from './data/nuts_code';
 import { getStatsForId } from './data/statistik';
 import { searchService } from './services/searchService';
+import { plzService, PlzStatus } from './services/plzService';
 import { runDiagnostics } from './services/testRunner';
 import { NutsNode } from './types/nuts';
 import { APP_THEMES } from './constants/themes';
@@ -19,6 +20,7 @@ const formatPop = (pop: number) => pop <= 0 ? null : (pop < 1000 ? `${pop.toLoca
 const App = () => {
   const [selectedNode, setSelectedNode] = useState<NutsNode | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [plzStatus, setPlzStatus] = useState<PlzStatus>(plzService.getStatus());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(["DE", "DE2", "DE25"]));
   const [searchTerm, setSearchTerm] = useState("Fürth");
   const [scale, setScale] = useState(0.85);
@@ -30,39 +32,21 @@ const App = () => {
   const { wikiData, isLoading: isWikiLoading } = useWikipedia(selectedNode, showWikiPanel);
   const { nodes, links } = useNutsLayout(NUTS_DATA, expandedIds, searchTerm);
 
-  const totalNutsCount = useMemo(() => {
-    let count = 0;
-    const traverse = (node: NutsNode) => { count++; if (node.children) node.children.forEach(traverse); };
-    traverse(NUTS_DATA);
-    return count;
-  }, []);
+  const handleSearch = async () => {
+    const trimmedQuery = searchTerm.trim();
+    if (!trimmedQuery) return;
+    
+    setSearchError(null);
+    const res = await searchService.findRegion(trimmedQuery);
+    
+    // Status nach Suche aktualisieren (falls Datei geladen wurde)
+    setPlzStatus(plzService.getStatus());
 
-  const expandToLevel = (level: number) => {
-    const newExpanded = new Set<string>(["DE"]);
-    const traverse = (node: NutsNode) => {
-      if (node.level < level && node.children) {
-        newExpanded.add(node.id);
-        node.children.forEach(traverse);
-      }
-    };
-    traverse(NUTS_DATA);
-    setExpandedIds(newExpanded);
-  };
-
-  const toggleAll = (expand: boolean) => {
-    if (!expand) {
-      setExpandedIds(new Set(["DE"]));
-      return;
+    if (res.node) { 
+      selectAndCenter(res.node); 
+    } else { 
+      setSearchError(res.error || `Kein Treffer für '${trimmedQuery}'.`); 
     }
-    const newExpanded = new Set<string>();
-    const traverse = (node: NutsNode) => {
-      if (node.children) {
-        newExpanded.add(node.id);
-        node.children.forEach(traverse);
-      }
-    };
-    traverse(NUTS_DATA);
-    setExpandedIds(newExpanded);
   };
 
   const selectAndCenter = (node: NutsNode) => {
@@ -92,30 +76,15 @@ const App = () => {
       document.querySelector(`[data-node-id="${node.id}"]`)?.scrollIntoView({ 
         behavior: 'smooth', block: 'center', inline: 'center' 
       });
-      
       const sidebarItem = document.getElementById(`sidebar-item-${node.id}`);
-      if (sidebarItem) {
-        sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
+      if (sidebarItem) sidebarItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 150);
-  };
-
-  const handleSearch = async () => {
-    const trimmedQuery = searchTerm.trim();
-    if (!trimmedQuery) return;
-    
-    setSearchError(null);
-    const res = await searchService.findRegion(trimmedQuery);
-    
-    if (res.node) { 
-      selectAndCenter(res.node); 
-    } else { 
-      setSearchError(res.error || `Kein Treffer für '${trimmedQuery}'.`); 
-    }
   };
 
   useEffect(() => {
     const init = async () => { 
+      await plzService.init();
+      setPlzStatus(plzService.getStatus());
       const res = await searchService.findBestMatch("Fürth"); 
       if (res.node) selectAndCenter(res.node); 
       runDiagnostics(); 
@@ -123,16 +92,12 @@ const App = () => {
     init();
   }, []);
 
-  const breadcrumbs = useMemo(() => {
-    const path: NutsNode[] = [];
-    const findPath = (curr: NutsNode, targetId: string): boolean => {
-      if (curr.id === targetId) { path.push(curr); return true; }
-      if (curr.children) { for (const child of curr.children) { if (findPath(child, targetId)) { path.unshift(curr); return true; } } }
-      return false;
-    };
-    findPath(NUTS_DATA, (selectedNode || NUTS_DATA).id);
-    return path;
-  }, [selectedNode]);
+  const totalNutsCount = useMemo(() => {
+    let count = 0;
+    const traverse = (node: NutsNode) => { count++; if (node.children) node.children.forEach(traverse); };
+    traverse(NUTS_DATA);
+    return count;
+  }, []);
 
   const isDark = currentTheme.id !== 'white';
   const nodeStats = useMemo(() => selectedNode ? getStatsForId(selectedNode.id, selectedNode.pop || 0) : null, [selectedNode]);
@@ -149,58 +114,45 @@ const App = () => {
             <div className="text-[10px] font-black px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">{totalNutsCount} CODES</div>
           </header>
           
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase opacity-50 ml-1">Suche Region / PLZ</label>
+          <div className="space-y-1.5 relative">
+            <div className="flex justify-between items-center ml-1">
+               <label className="text-[10px] font-bold uppercase opacity-50">Suche Region / PLZ</label>
+               <div 
+                 title={plzStatus.error || (plzStatus.source === 'file' ? `Datenbank OK (${plzStatus.count} PLZs)` : 'Eingeschränkter Modus')}
+                 className={`w-2 h-2 rounded-full cursor-help ${plzStatus.source === 'file' ? 'bg-emerald-500' : (plzStatus.source === 'fallback' ? 'bg-amber-500 animate-pulse' : 'bg-red-500')}`}
+               />
+            </div>
             <input 
               type="text" 
               placeholder="z.B. München, 10115, DE212" 
               className={`w-full rounded-xl px-4 py-3 text-sm outline-none transition-all ${isDark ? 'bg-white/5 border border-white/10 text-white focus:border-blue-500/50 focus:bg-white/10' : 'bg-slate-100 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500/50'}`} 
               value={searchTerm} 
               onKeyDown={e => e.key === 'Enter' && handleSearch()} 
-              onChange={e => {
-                setSearchTerm(e.target.value);
-                if (searchError) setSearchError(null);
-              }} 
+              onChange={e => { setSearchTerm(e.target.value); if (searchError) setSearchError(null); }} 
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <div className="text-[9px] font-bold uppercase opacity-40 ml-1">Schnell-Navigation</div>
             <div className="flex gap-1">
               {[1, 2, 3].map(lvl => (
-                <button 
-                  key={lvl} 
-                  onClick={() => expandToLevel(lvl)}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black border transition-all ${isDark ? 'bg-white/5 border-white/10 hover:bg-blue-500 hover:text-white' : 'bg-slate-100 border border-slate-200 hover:bg-blue-500 hover:text-white'}`}
-                >
+                <button key={lvl} onClick={() => {
+                  const newExpanded = new Set<string>(["DE"]);
+                  const traverse = (node: NutsNode) => { if (node.level < lvl && node.children) { newExpanded.add(node.id); node.children.forEach(traverse); } };
+                  traverse(NUTS_DATA);
+                  setExpandedIds(newExpanded);
+                }} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black border transition-all ${isDark ? 'bg-white/5 border-white/10 hover:bg-blue-500 hover:text-white' : 'bg-slate-100 border border-slate-200 hover:bg-blue-500 hover:text-white'}`}>
                   E{lvl}
                 </button>
               ))}
-              <button 
-                onClick={() => toggleAll(true)}
-                className={`px-2 py-1.5 rounded-lg text-[10px] font-black border ${isDark ? 'bg-white/5 border-white/10 hover:bg-emerald-500 hover:text-white' : 'bg-slate-100 border border-slate-200 hover:bg-emerald-500 hover:text-white'}`}
-                title="Alles ausklappen"
-              >
-                + ALL
-              </button>
-              <button 
-                onClick={() => toggleAll(false)}
-                className={`px-2 py-1.5 rounded-lg text-[10px] font-black border ${isDark ? 'bg-white/5 border-white/10 hover:bg-rose-500 hover:text-white' : 'bg-slate-100 border border-slate-200 hover:bg-rose-500 hover:text-white'}`}
-                title="Alles zuklappen"
-              >
-                - ALL
-              </button>
             </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4 custom-scrollbar">
           {searchError && (
-            <div className="p-3 bg-red-500/10 text-red-500 text-xs font-bold rounded-xl border border-red-500/20 leading-relaxed shadow-sm">
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5">⚠️</span>
-                <span>{searchError}</span>
-              </div>
+            <div className="p-3 bg-red-500/10 text-red-500 text-[10px] font-bold rounded-xl border border-red-500/20 leading-tight">
+              {searchError}
+              {plzStatus.source !== 'file' && <div className="mt-1 opacity-60 font-medium">Tipp: Server liefert PLZ-Mapping nicht aus. Versuche Region-Namen.</div>}
             </div>
           )}
           
@@ -211,28 +163,16 @@ const App = () => {
               <div className="text-[11px] space-y-1.5 opacity-70 border-t border-slate-500/10 pt-3">
                 <div className="flex justify-between"><span>Ebene:</span><span className="font-bold">NUTS {selectedNode.level}</span></div>
                 <div className="flex justify-between"><span>Einwohner:</span><span className="font-bold text-blue-400">{formatPop(nodeStats ? nodeStats.pop : 0) || 'k.A.'}</span></div>
-                {nodeStats && typeof nodeStats.area === 'number' && nodeStats.area > 0 && (
-                   <div className="flex justify-between"><span>Fläche:</span><span className="font-bold">{nodeStats.area.toLocaleString()} km²</span></div>
-                )}
+                {nodeStats && typeof nodeStats.area === 'number' && nodeStats.area > 0 && <div className="flex justify-between"><span>Fläche:</span><span className="font-bold">{nodeStats.area.toLocaleString()} km²</span></div>}
               </div>
             </div>
           )}
 
           <section className={`rounded-2xl border overflow-hidden ${isDark ? 'bg-black/20 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
-            <button onClick={() => setShowFullHierarchy(!showFullHierarchy)} className="w-full flex items-center justify-between p-4 text-[10px] font-bold uppercase opacity-50 hover:opacity-100 transition-opacity">
-              Strukturübersicht
-              <span className="text-[8px] transform transition-transform duration-300" style={{ transform: showFullHierarchy ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-            </button>
+            <button onClick={() => setShowFullHierarchy(!showFullHierarchy)} className="w-full flex items-center justify-between p-4 text-[10px] font-bold uppercase opacity-50 hover:opacity-100 transition-opacity">Strukturübersicht</button>
             {showFullHierarchy && (
               <div className="p-2 pt-0 max-h-[450px] overflow-y-auto custom-scrollbar">
-                <HierarchyTree 
-                  node={NUTS_DATA} 
-                  expandedIds={expandedIds} 
-                  selectedNode={selectedNode} 
-                  currentTheme={currentTheme} 
-                  onToggle={id => setExpandedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })} 
-                  onSelect={selectAndCenter} 
-                />
+                <HierarchyTree node={NUTS_DATA} expandedIds={expandedIds} selectedNode={selectedNode} currentTheme={currentTheme} onToggle={id => setExpandedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })} onSelect={selectAndCenter} />
               </div>
             )}
           </section>
@@ -241,11 +181,6 @@ const App = () => {
       </aside>
 
       <div className="flex-1 flex flex-col relative overflow-hidden">
-        <div className="p-6 pb-2 z-10">
-          <div className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full backdrop-blur-xl border shadow-lg ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/80 border-slate-200'}`}>
-            {breadcrumbs.map((node, i) => <React.Fragment key={node.id}><button onClick={() => selectAndCenter(node)} className={`text-[13px] font-bold transition-colors ${i === breadcrumbs.length - 1 ? 'text-blue-500' : 'opacity-60 hover:text-blue-500'}`}>{node.name}</button>{i < breadcrumbs.length - 1 && <span className="opacity-30">/</span>}</React.Fragment>)}
-          </div>
-        </div>
         <MindmapCanvas nodes={nodes} links={links} scale={scale} currentTheme={currentTheme} selectedNode={selectedNode} expandedIds={expandedIds} onSelect={selectAndCenter} onToggle={id => setExpandedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })} />
       </div>
 
