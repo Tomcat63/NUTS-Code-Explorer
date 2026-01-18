@@ -69,7 +69,6 @@ const App = () => {
     if (!node) return;
     setSearchError(null);
     
-    // Pfad zum Knoten finden und alle Eltern ausklappen
     const newExpanded = new Set(expandedIds);
     const findAndExpand = (curr: NutsNode, targetId: string): boolean => {
       if (curr.id === targetId) return true;

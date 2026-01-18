@@ -8,9 +8,6 @@ export interface SearchResult {
   error?: string;
 }
 
-/**
- * Normalisiert Text für die Suche (Entfernt Umlaute und Sonderzeichen)
- */
 const normalizeText = (text: string): string => {
   return text
     .toLowerCase()
@@ -20,7 +17,7 @@ const normalizeText = (text: string): string => {
     .replace(/ü/g, 'ue')
     .replace(/ß/g, 'ss')
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, ""); // Entfernt Diakritika
+    .replace(/[\u0300-\u036f]/g, "");
 };
 
 export const searchService = {
@@ -32,27 +29,20 @@ export const searchService = {
     return list;
   },
 
-  /**
-   * Erweiterte Suche mit Fuzzy-Logik
-   */
   findBestMatch(query: string): { node: NutsNode | null; type: 'id' | 'text' | 'fuzzy' } {
     const allNodes = this.getAllNodes(NUTS_DATA);
     const normalizedQuery = normalizeText(query);
     const lowerQuery = query.toLowerCase().trim();
 
-    // 1. Exakter Match ID (Priorität 1)
     const idMatch = allNodes.find(n => n.id.toLowerCase() === lowerQuery);
     if (idMatch) return { node: idMatch, type: 'id' };
 
-    // 2. Exakter Match Name (Priorität 2)
     const exactNameMatch = allNodes.find(n => n.name.toLowerCase() === lowerQuery);
     if (exactNameMatch) return { node: exactNameMatch, type: 'text' };
 
-    // 3. Teil-Match Name (Normalisiert)
     const partialMatches = allNodes
       .filter(n => normalizeText(n.name).includes(normalizedQuery))
       .sort((a, b) => {
-        // Kürzere Namen/IDs zuerst (meist wichtigere Regionen)
         if (a.level !== b.level) return a.level - b.level;
         return a.name.length - b.name.length;
       });
@@ -68,20 +58,20 @@ export const searchService = {
     const trimmed = query.trim();
     if (trimmed.length < 2) return { node: null, type: 'text' };
 
-    // 1. PLZ Suche
-    if (/^\d+$/.test(trimmed)) {
-      if (trimmed.length === 5) {
+    // 1. PLZ Suche (Versuch)
+    if (/^\d{5}$/.test(trimmed)) {
+      try {
         const nutsCode = await plzService.getNuts3Code(trimmed);
         if (nutsCode) {
           const match = this.findBestMatch(nutsCode);
           if (match.node) return { node: match.node, type: 'plz' };
         }
-        return { node: null, type: 'plz', error: 'PLZ nicht gefunden' };
+      } catch (e) {
+        console.error("PLZ Lookup failed, using text fallback");
       }
-      return { node: null, type: 'plz' };
     }
 
-    // 2. Text/Fuzzy Suche
+    // 2. Text/Fuzzy Suche (Immer als Fallback, falls PLZ nichts findet oder fehlschlägt)
     const result = this.findBestMatch(trimmed);
     return { node: result.node, type: result.type };
   }
