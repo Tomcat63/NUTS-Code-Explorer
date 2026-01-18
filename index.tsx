@@ -88,9 +88,9 @@ const App = () => {
     // UI Update
     setExpandedIds(newExpanded);
     setSelectedNode(node);
-    setShowFullHierarchy(true); // Sicherstellen, dass Strukturübersicht offen ist
+    setShowFullHierarchy(true); 
 
-    // 2. Scroll-Logik (Kurze Verzögerung für DOM Updates)
+    // 2. Scroll-Logik (Kurze Verzögerung für DOM Updates/Expansion)
     setTimeout(() => {
       // Zentrieren im Mindmap
       document.querySelector(`[data-node-id="${node.id}"]`)?.scrollIntoView({ 
@@ -106,14 +106,15 @@ const App = () => {
   };
 
   const handleSearch = async () => {
-    if (!searchTerm.trim()) return;
-    const res = await searchService.findRegion(searchTerm);
+    const trimmedQuery = searchTerm.trim();
+    if (!trimmedQuery) return;
+    const res = await searchService.findRegion(trimmedQuery);
     if (res.node) { 
       selectAndCenter(res.node); 
       setSearchError(null); 
     }
     else { 
-      setSearchError(res.error || `Kein Treffer für '${searchTerm}'.`); 
+      setSearchError(res.error || `Kein Treffer für '${trimmedQuery}'.`); 
     }
   };
 
