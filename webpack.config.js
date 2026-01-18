@@ -33,6 +33,10 @@ module.exports = {
   devServer: {
     static: [
       {
+        directory: Path.join(__dirname, 'assets'),
+        publicPath: '/assets',
+      },
+      {
         directory: Path.join(__dirname, '/'),
       },
       {
@@ -42,5 +46,8 @@ module.exports = {
     port: 5173,
     hot: true,
     historyApiFallback: true,
+  },
+  watchOptions: {
+    ignored: ['**/node_modules', '**/*.md', '**/dist', '**/assets'],
   },
 };

@@ -10,9 +10,11 @@ import { NutsNode } from './types/nuts';
 import { APP_THEMES } from './constants/themes';
 import { HierarchyTree } from './components/Sidebar/HierarchyTree';
 import { WikiPanel } from './components/Sidebar/WikiPanel';
+import { EurostatPanel } from './components/Sidebar/EurostatPanel';
 import { SettingsMenu } from './components/UI/SettingsMenu';
 import { MindmapCanvas } from './components/Mindmap/MindmapCanvas';
 import { useWikipedia } from './hooks/useWikipedia';
+import { useWeather } from './hooks/useWeather';
 import { useNutsLayout } from './hooks/useNutsLayout';
 
 const formatPop = (pop: number) => pop <= 0 ? null : (pop < 1000 ? `${pop.toLocaleString()} Tsd.` : `${(pop / 1000).toFixed(2)} Mio.`);
@@ -22,14 +24,16 @@ const App = () => {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [plzStatus, setPlzStatus] = useState<PlzStatus>(plzService.getStatus());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(["DE", "DE2", "DE25"]));
-  const [searchTerm, setSearchTerm] = useState("Fürth");
+  const [searchTerm, setSearchTerm] = useState("Nürnberg");
   const [scale, setScale] = useState(0.85);
   const [showFullHierarchy, setShowFullHierarchy] = useState(true);
   const [currentTheme, setCurrentTheme] = useState(APP_THEMES[0]);
   const [showSettings, setShowSettings] = useState(false);
   const [showWikiPanel, setShowWikiPanel] = useState(true);
+  const [hasSearchResult, setHasSearchResult] = useState(false);
 
   const { wikiData, isLoading: isWikiLoading } = useWikipedia(selectedNode, showWikiPanel);
+  const { data: weatherData, loading: weatherLoading } = useWeather(selectedNode?.name || null, showWikiPanel);
   const { nodes, links } = useNutsLayout(NUTS_DATA, expandedIds, searchTerm);
 
   const isDark = currentTheme.id !== 'white';
@@ -44,8 +48,10 @@ const App = () => {
 
     if (res.node) {
       selectAndCenter(res.node);
+      setHasSearchResult(true);
     } else {
       setSearchError(res.error || `Kein Treffer für '${trimmedQuery}'.`);
+      setHasSearchResult(false);
     }
   };
 
@@ -71,6 +77,7 @@ const App = () => {
     setExpandedIds(newExpanded);
     setSelectedNode(node);
     setShowFullHierarchy(true);
+    setHasSearchResult(true);
 
     setTimeout(() => {
       document.querySelector(`[data-node-id="${node.id}"]`)?.scrollIntoView({
@@ -85,7 +92,7 @@ const App = () => {
     const init = async () => {
       await plzService.init();
       setPlzStatus(plzService.getStatus());
-      const res = await searchService.findBestMatch("Fürth");
+      const res = await searchService.findBestMatch("Nürnberg");
       if (res.node) selectAndCenter(res.node);
       runDiagnostics();
     };
@@ -122,22 +129,27 @@ const App = () => {
     <div className={`flex h-screen w-full ${currentTheme.bg} transition-colors duration-1000 overflow-hidden font-sans ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
       {/* Sidebar */}
       <aside className={`w-80 border-r flex flex-col backdrop-blur-2xl z-20 shadow-2xl shrink-0 ${isDark ? 'bg-black/30 border-white/5' : 'bg-white/60 border-slate-200'}`}>
-        <div className="p-6 flex flex-col gap-4 shrink-0">
-          <header className="flex justify-between items-end">
-            <div>
-              <h1 className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>NUTS Explorer</h1>
-              <div className="text-[9px] opacity-40 uppercase tracking-widest font-black">Deutschland 2024</div>
+        <div className="p-6 flex flex-col gap-8 shrink-0">
+          <header className="flex flex-col ml-1">
+            <div className="flex items-center gap-5">
+              <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_30px_rgba(59,130,246,0.2)] ring-4 ring-blue-500/10">
+                <img src="/assets/logo.jpeg" alt="NUTS Explorer Logo" className="w-full h-full object-cover rounded-3xl scale-110" />
+              </div>
+              <div>
+                <h1 className={`text-4xl font-black leading-[0.9] tracking-tighter ${isDark ? 'text-white' : 'text-slate-900'}`}>NUTS<br />Explorer</h1>
+                <div className="text-[11px] opacity-40 uppercase tracking-[0.25em] font-black mt-3">Deutschland v2024</div>
+              </div>
             </div>
-            <div className="text-[10px] font-black px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">{totalNutsCount} CODES</div>
+            <div className="text-[12px] font-black opacity-60 uppercase mt-5 flex items-center gap-3 px-1">
+              <span className="text-blue-500">{totalNutsCount} CODES</span>
+              <span className="opacity-20 text-[10px]">●</span>
+              <span>{plzStatus.count} PLZ</span>
+            </div>
           </header>
 
           <div className="space-y-1.5 relative">
             <div className="flex justify-between items-center ml-1">
               <label className="text-[10px] font-bold uppercase opacity-50">Suche nach PLZ/Region</label>
-              <div
-                title={plzStatus.error || (plzStatus.source === 'file' ? `Datenbank OK (${plzStatus.count} PLZs)` : 'Eingeschränkter Modus')}
-                className={`w-2 h-2 rounded-full cursor-help ${plzStatus.source === 'file' ? 'bg-emerald-500' : (plzStatus.source === 'fallback' ? 'bg-amber-500 animate-pulse' : 'bg-red-500')}`}
-              />
             </div>
             <input
               type="text"
@@ -197,6 +209,27 @@ const App = () => {
             </div>
           )}
 
+          {/* Weather Display - repositioned to left menu */}
+          {weatherData && (
+            <div className={`p-4 rounded-2xl border shrink-0 transition-all animate-in fade-in slide-in-from-bottom-2 ${isDark ? 'bg-white/5 border-white/5' : 'bg-sky-50/20 border-sky-500/10'} flex items-center gap-4`}>
+              <span className="text-4xl filter drop-shadow-md">{weatherData.icon}</span>
+              <div className="flex-1">
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{weatherData.temp}°C</span>
+                  <span className="text-[10px] font-bold uppercase opacity-50 tracking-tight">{weatherData.description}</span>
+                </div>
+                <div className="text-[10px] opacity-40 font-black uppercase mt-0.5 flex items-center gap-1.5">
+                  <span className="text-blue-500">WIND</span>
+                  <span className="opacity-20 text-[6px]">●</span>
+                  <span>{weatherData.windSpeed} km/h</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {weatherLoading && (
+            <div className={`p-4 rounded-2xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'} h-20 shrink-0`} />
+          )}
+
           <section className={`flex-1 min-h-0 flex flex-col rounded-2xl border overflow-hidden shrink-0 ${isDark ? 'bg-black/20 border-emerald-500/20' : 'bg-emerald-50/10 border-emerald-500/20'}`}>
             <button onClick={() => setShowFullHierarchy(!showFullHierarchy)} className="w-full flex items-center justify-between p-4 text-[10px] font-bold uppercase opacity-50 hover:opacity-100 transition-opacity shrink-0">
               Strukturübersicht
@@ -232,10 +265,15 @@ const App = () => {
         <MindmapCanvas nodes={nodes} links={links} scale={scale} currentTheme={currentTheme} selectedNode={selectedNode} expandedIds={expandedIds} onSelect={selectAndCenter} onToggle={id => setExpandedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })} />
       </main>
 
-      {/* Wiki Panel */}
-      {selectedNode && showWikiPanel && (
+      {/* API Panel - only shows after successful search with API-Call enabled */}
+      {selectedNode && hasSearchResult && showWikiPanel && (
         <aside className={`w-[320px] border-l backdrop-blur-2xl z-20 shrink-0 ${isDark ? 'bg-black/20 border-white/5' : 'bg-white/60 border-slate-200'} overflow-y-auto custom-scrollbar`}>
-          <WikiPanel wikiData={wikiData} isLoading={isWikiLoading} theme={currentTheme} />
+          <div className="flex flex-col min-h-full">
+            <WikiPanel wikiData={wikiData} isLoading={isWikiLoading} theme={currentTheme} />
+            <div className="px-6 pb-6 space-y-4">
+              <EurostatPanel node={selectedNode} currentTheme={currentTheme} />
+            </div>
+          </div>
         </aside>
       )}
     </div>

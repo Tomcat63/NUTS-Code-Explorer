@@ -41,12 +41,12 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
               <label className="flex items-center gap-2 cursor-pointer group">
                 <input type="radio" className="sr-only" checked={showWiki} onChange={() => setShowWiki(true)} />
                 <div className={`w-3.5 h-3.5 rounded-full border-2 ${showWiki ? 'bg-blue-500 border-blue-500' : 'border-slate-500'}`} />
-                <span className="text-[10px] font-bold">Wiki-Spalte AN</span>
+                <span className="text-[10px] font-bold">API-Call AN</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer group">
                 <input type="radio" className="sr-only" checked={!showWiki} onChange={() => setShowWiki(false)} />
                 <div className={`w-3.5 h-3.5 rounded-full border-2 ${!showWiki ? 'bg-blue-500 border-blue-500' : 'border-slate-500'}`} />
-                <span className="text-[10px] font-bold">Wiki-Spalte AUS</span>
+                <span className="text-[10px] font-bold">API-Call AUS</span>
               </label>
             </div>
           </div>
