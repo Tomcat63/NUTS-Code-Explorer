@@ -4,18 +4,26 @@ import { NUTS_DATA, NutsNode } from '../data/nuts_code';
 
 export interface SearchResult {
   node: NutsNode | null;
-  type: 'plz' | 'text' | 'id';
+  type: 'plz' | 'text' | 'id' | 'fuzzy';
   error?: string;
 }
 
 /**
- * searchService bietet Methoden zur Auflösung von NUTS-Regionen basierend auf
- * PLZ, Namen oder NUTS-IDs.
+ * Normalisiert Text für die Suche (Entfernt Umlaute und Sonderzeichen)
  */
+const normalizeText = (text: string): string => {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // Entfernt Diakritika
+};
+
 export const searchService = {
-  /**
-   * Sammelt alle Knoten flach in einer Liste für eine gewichtete Suche.
-   */
   getAllNodes(node: NutsNode, list: NutsNode[] = []): NutsNode[] {
     list.push(node);
     if (node.children) {
@@ -25,60 +33,56 @@ export const searchService = {
   },
 
   /**
-   * Findet den besten Match im Baum.
-   * Strategie: Exakte IDs > Exakte Namen > Teil-Names (Kürzeste ID zuerst = höhere Hierarchie).
+   * Erweiterte Suche mit Fuzzy-Logik
    */
-  findBestMatch(query: string): NutsNode | null {
-    const normalizedQuery = query.toLowerCase().trim();
+  findBestMatch(query: string): { node: NutsNode | null; type: 'id' | 'text' | 'fuzzy' } {
     const allNodes = this.getAllNodes(NUTS_DATA);
+    const normalizedQuery = normalizeText(query);
+    const lowerQuery = query.toLowerCase().trim();
 
-    // 1. Exakter Match ID
-    const idMatch = allNodes.find(n => n.id.toLowerCase() === normalizedQuery);
-    if (idMatch) return idMatch;
+    // 1. Exakter Match ID (Priorität 1)
+    const idMatch = allNodes.find(n => n.id.toLowerCase() === lowerQuery);
+    if (idMatch) return { node: idMatch, type: 'id' };
 
-    // 2. Exakter Match Name
-    const exactNameMatch = allNodes.find(n => n.name.toLowerCase() === normalizedQuery);
-    if (exactNameMatch) return exactNameMatch;
+    // 2. Exakter Match Name (Priorität 2)
+    const exactNameMatch = allNodes.find(n => n.name.toLowerCase() === lowerQuery);
+    if (exactNameMatch) return { node: exactNameMatch, type: 'text' };
 
-    // 3. Teil-Match Name
-    // Wir sortieren nach ID-Länge, damit NUTS-1 (z.B. DE1) vor NUTS-3 (z.B. DE111) gefunden wird
+    // 3. Teil-Match Name (Normalisiert)
     const partialMatches = allNodes
-      .filter(n => n.name.toLowerCase().includes(normalizedQuery))
-      .sort((a, b) => a.id.length - b.id.length);
+      .filter(n => normalizeText(n.name).includes(normalizedQuery))
+      .sort((a, b) => {
+        // Kürzere Namen/IDs zuerst (meist wichtigere Regionen)
+        if (a.level !== b.level) return a.level - b.level;
+        return a.name.length - b.name.length;
+      });
 
-    return partialMatches.length > 0 ? partialMatches[0] : null;
-  },
-
-  /**
-   * Hauptmethode für die Suche.
-   */
-  async findRegion(query: string): Promise<SearchResult> {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) {
-        return { node: null, type: 'text' };
+    if (partialMatches.length > 0) {
+      return { node: partialMatches[0], type: 'fuzzy' };
     }
 
-    // 1. Suche nach PLZ (5 Ziffern)
-    const isOnlyDigits = /^\d+$/.test(trimmed);
-    if (isOnlyDigits) {
+    return { node: null, type: 'text' };
+  },
+
+  async findRegion(query: string): Promise<SearchResult> {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return { node: null, type: 'text' };
+
+    // 1. PLZ Suche
+    if (/^\d+$/.test(trimmed)) {
       if (trimmed.length === 5) {
         const nutsCode = await plzService.getNuts3Code(trimmed);
         if (nutsCode) {
-          const node = this.findBestMatch(nutsCode);
-          if (node) return { node, type: 'plz' };
+          const match = this.findBestMatch(nutsCode);
+          if (match.node) return { node: match.node, type: 'plz' };
         }
-        return { node: null, type: 'plz', error: 'PLZ nicht im Mapping gefunden' };
+        return { node: null, type: 'plz', error: 'PLZ nicht gefunden' };
       }
       return { node: null, type: 'plz' };
     }
 
-    // 2. Suche nach ID oder Text über gewichteten Matcher
-    const node = this.findBestMatch(trimmed);
-    if (node) {
-      const isId = node.id.toLowerCase() === trimmed.toLowerCase();
-      return { node, type: isId ? 'id' : 'text' };
-    }
-
-    return { node: null, type: 'text' };
+    // 2. Text/Fuzzy Suche
+    const result = this.findBestMatch(trimmed);
+    return { node: result.node, type: result.type };
   }
 };
