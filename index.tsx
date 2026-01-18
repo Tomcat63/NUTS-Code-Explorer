@@ -103,12 +103,13 @@ const App = () => {
   const handleSearch = async () => {
     const trimmedQuery = searchTerm.trim();
     if (!trimmedQuery) return;
+    
+    setSearchError(null);
     const res = await searchService.findRegion(trimmedQuery);
+    
     if (res.node) { 
       selectAndCenter(res.node); 
-      setSearchError(null); 
-    }
-    else { 
+    } else { 
       setSearchError(res.error || `Kein Treffer für '${trimmedQuery}'.`); 
     }
   };
@@ -156,7 +157,10 @@ const App = () => {
               className={`w-full rounded-xl px-4 py-3 text-sm outline-none transition-all ${isDark ? 'bg-white/5 border border-white/10 text-white focus:border-blue-500/50 focus:bg-white/10' : 'bg-slate-100 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500/50'}`} 
               value={searchTerm} 
               onKeyDown={e => e.key === 'Enter' && handleSearch()} 
-              onChange={e => setSearchTerm(e.target.value)} 
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                if (searchError) setSearchError(null);
+              }} 
             />
           </div>
 
@@ -191,7 +195,14 @@ const App = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4 custom-scrollbar">
-          {searchError && <div className="p-3 bg-red-500/10 text-red-500 text-xs font-bold rounded-xl animate-pulse border border-red-500/20">{searchError}</div>}
+          {searchError && (
+            <div className="p-3 bg-red-500/10 text-red-500 text-xs font-bold rounded-xl border border-red-500/20 leading-relaxed shadow-sm">
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5">⚠️</span>
+                <span>{searchError}</span>
+              </div>
+            </div>
+          )}
           
           {selectedNode && (
             <div className={`rounded-2xl p-5 border ${isDark ? 'bg-white/10 border-white/10 shadow-inner' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
