@@ -56,7 +56,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
           </div>
           <div className="mt-3 pt-3 border-t border-slate-500/10">
             <h3 className="text-[9px] font-black uppercase text-slate-500 px-1 mb-0.5">About</h3>
-            <div className="px-1 text-[10px] leading-tight opacity-60">
+            <div className="px-1 mt-2 text-[10px] leading-tight opacity-40">
               Team ET1, 01.2026<br />
               TERCET NUTS v2024
             </div>
@@ -66,3 +66,4 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
     </div>
   );
 };
+
