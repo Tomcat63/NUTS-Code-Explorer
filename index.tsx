@@ -12,6 +12,7 @@ import { HierarchyTree } from './components/Sidebar/HierarchyTree';
 import { WikiPanel } from './components/Sidebar/WikiPanel';
 import { EurostatPanel } from './components/Sidebar/EurostatPanel';
 import { SettingsMenu } from './components/UI/SettingsMenu';
+import { AboutDialog } from './components/UI/AboutDialog';
 import { MindmapCanvas } from './components/Mindmap/MindmapCanvas';
 import { useWikipedia } from './hooks/useWikipedia';
 import { useWeather } from './hooks/useWeather';
@@ -35,6 +36,7 @@ const App = () => {
     return APP_THEMES.find(t => t.id === saved) || APP_THEMES[0];
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showWikiPanel, setShowWikiPanel] = useState(true);
   const [hasSearchResult, setHasSearchResult] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'pdf' | 'audio'>('info');
@@ -179,49 +181,46 @@ const App = () => {
     <div className={`flex h-screen w-full ${currentTheme.bg} transition-colors duration-1000 overflow-hidden font-sans ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
       {/* Sidebar */}
       <aside className={`w-80 border-r flex flex-col backdrop-blur-2xl z-20 shadow-2xl shrink-0 ${isDark ? 'bg-black/30 border-white/5' : 'bg-white/60 border-slate-200'}`}>
-        <div className="p-6 flex flex-col gap-8 shrink-0">
+        <div className="p-6 pb-6 flex flex-col gap-6 shrink-0">
           <header className="flex flex-col ml-1">
-            <div className="flex items-center gap-5">
-              <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_30px_rgba(59,130,246,0.2)] ring-4 ring-blue-500/10">
-                <img src="/assets/logo.jpeg" alt="NUTS Explorer Logo" className="w-full h-full object-cover rounded-3xl scale-110" />
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col">
+                <h1 className="text-[42px] font-black leading-[0.85] tracking-[-0.04em] bg-gradient-to-r from-[#A855F7] via-[#6366F1] to-[#22D3EE] bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(168,85,247,0.2)] py-1">
+                  NUTS<br />Explorer
+                </h1>
+                <div className="text-[11px] opacity-40 uppercase tracking-[0.2em] font-black mt-2.5">Deutschland v2024</div>
               </div>
-              <div>
-                <h1 className={`text-4xl font-black leading-[0.9] tracking-tighter ${isDark ? 'text-white' : 'text-slate-900'}`}>NUTS<br />Explorer</h1>
-                <div className="text-[11px] opacity-40 uppercase tracking-[0.25em] font-black mt-3">Deutschland v2024</div>
+              <div className="w-28 h-28 rounded-[32px] bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_40px_rgba(59,130,246,0.1)] ring-4 ring-blue-500/5">
+                <img src="/assets/logo.jpeg" alt="NUTS Explorer Logo" className="w-full h-full object-cover rounded-[32px] scale-110" />
               </div>
-            </div>
-            <div className="text-[12px] font-black opacity-60 uppercase mt-5 flex items-center gap-3 px-1">
-              <span className="text-blue-500">{totalNutsCount} CODES</span>
-              <span className="opacity-20 text-[10px]">●</span>
-              <span>{plzStatus.count} PLZ</span>
             </div>
           </header>
 
           <div className="space-y-1.5 relative">
             <div className="flex justify-between items-center ml-1">
-              <label className="text-[10px] font-bold uppercase opacity-50">Suche nach PLZ/Region</label>
+              <label className="text-[11px] font-black uppercase opacity-50">Suche nach PLZ/Region</label>
             </div>
             <input
               type="text"
               placeholder="z.B. München, 10115..."
-              className={`w-full rounded-xl px-4 py-3 text-sm outline-none transition-all ${isDark ? 'bg-white/5 border border-white/10 text-white focus:border-blue-500/50 focus:bg-white/10' : 'bg-slate-100 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500/50'}`}
+              className={`w-full rounded-xl px-4 py-3 text-base font-medium outline-none transition-all ${isDark ? 'bg-white/5 border border-white/10 text-white focus:border-blue-500/50 focus:bg-white/10' : 'bg-slate-100 border border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500/50'}`}
               value={searchTerm}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               onChange={e => { setSearchTerm(e.target.value); if (searchError) setSearchError(null); }}
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1">
             <div className="flex gap-1 items-center">
               <button onClick={() => {
                 const allIds = new Set<string>();
                 const traverse = (node: NutsNode) => { if (node.children) { allIds.add(node.id); node.children.forEach(traverse); } };
                 traverse(NUTS_DATA);
                 setExpandedIds(allIds);
-              }} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border transition-all ${isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white' : 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-500 hover:text-white'}`}>
+              }} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white' : 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-500 hover:text-white'}`}>
                 ALLE AUF
               </button>
-              <button onClick={() => setExpandedIds(new Set(["DE"]))} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black border transition-all ${isDark ? 'bg-slate-500/10 border-white/10 text-slate-400 hover:bg-slate-500 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-500 hover:text-white'}`}>
+              <button onClick={() => setExpandedIds(new Set(["DE"]))} className={`flex-1 py-2 rounded-lg text-[10px] font-black border transition-all ${isDark ? 'bg-slate-500/10 border-white/10 text-slate-400 hover:bg-slate-500 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-500 hover:text-white'}`}>
                 ALLE ZU
               </button>
             </div>
@@ -232,7 +231,7 @@ const App = () => {
                   const traverse = (node: NutsNode) => { if (node.level < lvl && node.children) { newExpanded.add(node.id); node.children.forEach(traverse); } };
                   traverse(NUTS_DATA);
                   setExpandedIds(newExpanded);
-                }} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black border transition-all ${isDark ? 'bg-white/5 border-white/10 hover:bg-blue-500 hover:text-white' : 'bg-slate-100 border border-slate-200 hover:bg-blue-500 hover:text-white'}`}>
+                }} className={`flex-1 py-1.5 rounded-lg text-[11px] font-black border transition-all ${isDark ? 'bg-white/5 border-white/10 hover:bg-blue-500 hover:text-white' : 'bg-slate-100 border border-slate-200 hover:bg-blue-500 hover:text-white'}`}>
                   E{lvl}
                 </button>
               ))}
@@ -240,7 +239,7 @@ const App = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4 flex flex-col min-h-0 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-6 pb-6 pt-0 space-y-4 flex flex-col min-h-0 custom-scrollbar">
           {searchError && (
             <div className="p-3 bg-red-500/10 text-red-500 text-[10px] font-bold rounded-xl border border-red-500/20 leading-tight shrink-0">
               {searchError}
@@ -248,9 +247,9 @@ const App = () => {
           )}
 
           {selectedNode && (
-            <div className={`rounded-2xl p-5 border shrink-0 ${isDark ? 'bg-white/10 border-white/10 shadow-inner' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
-              <div className="text-3xl font-black text-blue-500 mb-1 leading-none tracking-tighter">{selectedNode.id}</div>
-              <h2 className="text-lg font-bold mb-3 leading-tight">{selectedNode.name}</h2>
+            <div className={`rounded-xl p-3.5 border shrink-0 ${isDark ? 'bg-white/10 border-white/10 shadow-inner' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
+              <div className="text-2xl font-black text-blue-500 mb-0.5 leading-none tracking-tighter">{selectedNode.id}</div>
+              <h2 className="text-base font-bold mb-2 leading-tight">{selectedNode.name}</h2>
               <div className="text-[11px] space-y-1.5 opacity-70 border-t border-slate-500/10 pt-3">
                 <div className="flex justify-between"><span>Ebene:</span><span className="font-bold">NUTS {selectedNode.level}</span></div>
                 <div className="flex justify-between"><span>Einwohner:</span><span className="font-bold text-blue-400">{formatPop(nodeStats ? nodeStats.pop : 0) || 'k.A.'}</span></div>
@@ -292,8 +291,27 @@ const App = () => {
             )}
           </section>
         </div>
-        <SettingsMenu currentTheme={currentTheme} setTheme={setCurrentTheme} scale={scale} setScale={setScale} resetScale={() => setScale(0.85)} showWiki={showWikiPanel} setShowWiki={setShowWikiPanel} showSettings={showSettings} setShowSettings={setShowSettings} />
+        <SettingsMenu
+          currentTheme={currentTheme}
+          setTheme={setCurrentTheme}
+          scale={scale}
+          setScale={setScale}
+          resetScale={() => setScale(0.85)}
+          showWiki={showWikiPanel}
+          setShowWiki={setShowWikiPanel}
+          showSettings={showSettings}
+          setShowSettings={setShowSettings}
+          onShowAbout={() => setShowAboutDialog(true)}
+        />
       </aside>
+
+      <AboutDialog
+        isOpen={showAboutDialog}
+        onClose={() => setShowAboutDialog(false)}
+        totalCodes={totalNutsCount}
+        totalPlz={plzStatus.count}
+        theme={currentTheme}
+      />
 
       {/* Right Column Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 bg-transparent">
@@ -442,7 +460,7 @@ const App = () => {
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

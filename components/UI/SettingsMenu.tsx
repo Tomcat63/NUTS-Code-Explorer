@@ -13,17 +13,23 @@ interface SettingsMenuProps {
   setShowWiki: (v: boolean) => void;
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
+  onShowAbout: () => void;
 }
 
 export const SettingsMenu: React.FC<SettingsMenuProps> = ({
-  currentTheme, setTheme, scale, setScale, resetScale, showWiki, setShowWiki, showSettings, setShowSettings
+  currentTheme, setTheme, scale, setScale, resetScale, showWiki, setShowWiki, showSettings, setShowSettings, onShowAbout
 }) => {
   const isDark = currentTheme.id !== 'white';
 
   return (
-    <div className="p-4 border-t border-white/5 relative">
-      <button onClick={() => setShowSettings(!showSettings)} className={`w-10 h-10 border rounded-full flex items-center justify-center transition-all ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm'}`}>
+    <div className="p-4 border-t border-white/5 relative flex items-center gap-2">
+      <button onClick={() => setShowSettings(!showSettings)} title="Einstellungen" className={`w-10 h-10 border rounded-full flex items-center justify-center transition-all ${isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm'}`}>
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+      </button>
+      <button onClick={onShowAbout} title="Über NUTS Explorer" className={`w-10 h-10 border rounded-full flex items-center justify-center transition-all ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-slate-200 shadow-sm text-slate-600 hover:text-blue-500'}`}>
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
       </button>
       {showSettings && (
         <div className={`absolute bottom-full left-4 mb-4 w-56 backdrop-blur-2xl border rounded-2xl p-3 shadow-3xl z-50 ${isDark ? 'bg-black/90 border-white/10' : 'bg-white/95 border-slate-200'}`}>
@@ -54,13 +60,7 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
             <h3 className="text-[9px] font-black uppercase text-slate-500 px-1 mb-1">Themes</h3>
             <div className="grid grid-cols-4 gap-1.5">{APP_THEMES.map(t => <button key={t.id} onClick={() => setTheme(t)} title={t.name} className={`h-7 rounded border ${t.bg} ${currentTheme.id === t.id ? 'ring-2 ring-blue-500' : 'border-white/10'}`} />)}</div>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-500/10">
-            <h3 className="text-[9px] font-black uppercase text-slate-500 px-1 mb-0.5">About</h3>
-            <div className="px-1 mt-2 text-[10px] leading-tight opacity-40">
-              Team ET1, 01.2026<br />
-              TERCET NUTS v2024
-            </div>
-          </div>
+
         </div>
       )}
     </div>
