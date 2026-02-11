@@ -47,6 +47,9 @@ module.exports = {
         publicPath: '/media',
       }
     ],
+    host: '0.0.0.0',
+    allowedHosts: ['all', 'd123456', 'localhost'],
+    compress: true,
     port: 5173,
     hot: false,
     liveReload: false,

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { NUTS_DATA } from './data/nuts_code';
 import { getStatsForId } from './data/statistik';
@@ -39,7 +39,34 @@ const App = () => {
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showWikiPanel, setShowWikiPanel] = useState(true);
   const [hasSearchResult, setHasSearchResult] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'pdf' | 'audio'>('info');
+  const [contentView, setContentView] = useState<'mindmap' | 'pdf' | 'audio'>('mindmap');
+  const [infoPanelWidth, setInfoPanelWidth] = useState(() => {
+    const saved = localStorage.getItem('nuts_info_panel_width');
+    return saved ? Number(saved) : 400;
+  });
+  const isResizingRef = useRef(false);
+
+  const handleInfoResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = infoPanelWidth;
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      setInfoPanelWidth(Math.min(800, Math.max(250, startWidth + (startX - ev.clientX))));
+    };
+    const onUp = () => {
+      isResizingRef.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [infoPanelWidth]);
   const [currentPodcast, setCurrentPodcast] = useState({
     title: "Wie die EU Deutschland statistisch sortiert",
     file: "Wie_die_EU_Deutschland_statistisch_sortiert.m4a"
@@ -96,7 +123,7 @@ const App = () => {
     setSelectedNode(node);
     setShowFullHierarchy(true);
     setHasSearchResult(true);
-    setActiveTab('info');
+    setContentView('mindmap');
 
     setTimeout(() => {
       document.querySelector(`[data-node-id="${node.id}"]`)?.scrollIntoView({
@@ -150,6 +177,10 @@ const App = () => {
       localStorage.setItem('nuts_last_node_id', selectedNode.id);
     }
   }, [selectedNode]);
+
+  useEffect(() => {
+    localStorage.setItem('nuts_info_panel_width', String(infoPanelWidth));
+  }, [infoPanelWidth]);
 
   const totalNutsCount = useMemo(() => {
     let count = 0;
@@ -232,7 +263,7 @@ const App = () => {
                   traverse(NUTS_DATA);
                   setExpandedIds(newExpanded);
                 }} className={`flex-1 py-1.5 rounded-lg text-[11px] font-black border transition-all ${isDark ? 'bg-white/5 border-white/10 hover:bg-blue-500 hover:text-white' : 'bg-slate-100 border border-slate-200 hover:bg-blue-500 hover:text-white'}`}>
-                  E{lvl}
+                  NUTS-{lvl}
                 </button>
               ))}
             </div>
@@ -313,150 +344,162 @@ const App = () => {
         theme={currentTheme}
       />
 
+      {/* Vertical Tab Rail */}
+      <nav className={`w-12 shrink-0 flex flex-col items-center py-3 gap-1 border-r z-20 ${isDark ? 'bg-black/40 border-white/5' : 'bg-slate-50/80 border-slate-200'}`}>
+        {[
+          { id: 'mindmap' as const, label: 'NUTS-Region', icon: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="3" /><circle cx="4" cy="6" r="2" /><circle cx="20" cy="6" r="2" /><circle cx="4" cy="18" r="2" /><circle cx="20" cy="18" r="2" /><path d="M9.5 10.5L5.5 7.5M14.5 10.5L18.5 7.5M9.5 13.5L5.5 16.5M14.5 13.5L18.5 16.5" /></svg> },
+          { id: 'pdf' as const, label: 'Steckbrief', icon: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+          { id: 'audio' as const, label: 'Podcast', icon: <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18V5l12-3v13M9 9l12-3" strokeLinecap="round" strokeLinejoin="round" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="15" r="3" /></svg> }
+        ].map((tab, i) => (
+          <React.Fragment key={tab.id}>
+            {i === 1 && <div className={`w-6 my-1 border-t ${isDark ? 'border-white/10' : 'border-slate-300'}`} />}
+            <button
+              onClick={() => setContentView(tab.id)}
+              className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 group ${contentView === tab.id
+                ? `text-blue-500 ${isDark ? 'bg-blue-500/15 shadow-[0_0_12px_rgba(59,130,246,0.15)]' : 'bg-blue-50 shadow-sm'}`
+                : `${isDark ? 'text-slate-500 hover:text-slate-200 hover:bg-white/5' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'}`
+                }`}
+            >
+              {contentView === tab.id && <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-blue-500" />}
+              {tab.icon}
+              <div className={`absolute left-full ml-2 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl ${isDark ? 'bg-slate-800 text-white border border-white/10' : 'bg-white text-slate-900 border border-slate-200'}`}>
+                {tab.label}
+              </div>
+            </button>
+          </React.Fragment>
+        ))}
+      </nav>
+
       {/* Right Column Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 bg-transparent">
 
-        {/* Unified Top Navigation Bar */}
-        <header className={`h-14 border-b flex shrink-0 z-30 backdrop-blur-md ${isDark ? 'bg-black/20 border-white/10' : 'bg-white/80 border-slate-200'}`}>
-          {/* Breadcrumbs Section */}
-          <nav className="flex-1 flex items-center gap-1 px-6 overflow-x-auto custom-scrollbar select-none min-w-0">
-            {selectedPath.length > 0 ? selectedPath.map((node, i) => (
-              <div key={node.id} className="relative flex items-center group">
-                <div
-                  className={`relative px-3 py-1 flex items-center gap-1.5 ${i === 0 ? 'rounded-l-md pl-2.5' : 'pl-5'
-                    } ${i === selectedPath.length - 1
-                      ? 'bg-blue-500 text-white z-10'
-                      : `bg-${currentTheme.id === 'white' ? 'slate-200' : 'white/10'} hover:bg-blue-500/50 cursor-pointer ${isDark ? 'text-white' : 'text-slate-700'}`
-                    }`}
-                  style={{ clipPath: i === selectedPath.length - 1 ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 8px 50%)' : 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%, 8px 50%)', marginLeft: i > 0 ? '-10px' : '0' }}
-                  onClick={() => selectAndCenter(node)}
-                >
-                  <div className={`w-3 h-3 rounded-full flex items-center justify-center text-[7px] ${i === selectedPath.length - 1 ? 'bg-white/20' : 'bg-black/5'}`}>
-                    {i === 0 ? '🇩🇪' : i}
+        {/* Breadcrumbs - only in Mindmap view */}
+        {contentView === 'mindmap' && (
+          <header className={`h-12 border-b flex items-center shrink-0 z-30 backdrop-blur-md ${isDark ? 'bg-black/20 border-white/10' : 'bg-white/80 border-slate-200'}`}>
+            <nav className="flex-1 flex items-center gap-1 px-5 overflow-x-auto custom-scrollbar select-none min-w-0">
+              {selectedPath.length > 0 ? selectedPath.map((node, i) => (
+                <div key={node.id} className="relative flex items-center group">
+                  <div
+                    className={`relative px-3 py-1 flex items-center gap-1.5 ${i === 0 ? 'rounded-l-md pl-2.5' : 'pl-5'
+                      } ${i === selectedPath.length - 1
+                        ? 'bg-blue-500 text-white z-10'
+                        : `bg-${currentTheme.id === 'white' ? 'slate-200' : 'white/10'} hover:bg-blue-500/50 cursor-pointer ${isDark ? 'text-white' : 'text-slate-700'}`
+                      }`}
+                    style={{ clipPath: i === selectedPath.length - 1 ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 8px 50%)' : 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%, 8px 50%)', marginLeft: i > 0 ? '-10px' : '0' }}
+                    onClick={() => selectAndCenter(node)}
+                  >
+                    <div className={`w-3 h-3 rounded-full flex items-center justify-center text-[7px] ${i === selectedPath.length - 1 ? 'bg-white/20' : 'bg-black/5'}`}>
+                      {i === 0 ? '🇩🇪' : i}
+                    </div>
+                    <span className="pr-1 text-[8px] font-bold uppercase tracking-wide">{node.name.replace(/, Stadt/g, '').replace(/, Lk\./g, '').replace(/Regierungsbezirk /g, '')}</span>
                   </div>
-                  <span className="pr-1 text-[8px] font-bold uppercase tracking-wide">{node.name.replace(/, Stadt/g, '').replace(/, Lk\./g, '').replace(/Regierungsbezirk /g, '')}</span>
                 </div>
-              </div>
-            )) : <span className="text-xs opacity-50">Bitte wählen Sie eine Region aus der Liste oder Suche</span>}
-          </nav>
+              )) : <span className="text-xs opacity-50">Bitte wählen Sie eine Region aus der Liste oder Suche</span>}
+            </nav>
+          </header>
+        )}
 
-          {/* Tabs Section - Fixed width to match sidebar */}
-          {selectedNode && hasSearchResult && showWikiPanel && (
-            <div className={`w-[400px] flex shrink-0 border-l ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-              {[
-                { id: 'info', label: 'Info', icon: <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
-                { id: 'pdf', label: 'Dokument', icon: <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
-                { id: 'audio', label: 'Audio', icon: <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 10l12-3" /></svg> }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === tab.id
-                    ? 'text-blue-500 border-b-2 border-blue-500 bg-blue-500/5'
-                    : `opacity-40 hover:opacity-100 ${isDark ? 'text-white' : 'text-slate-900'}`
-                    }`}
-                >
-                  <span>{tab.icon}</span>
-                  {tab.label}
-                </button>
-              ))}
+        {/* Content Area */}
+        <div className="flex-1 min-h-0 relative">
+
+          {/* === MINDMAP TAB: Map + resizable Info Panel === */}
+          {contentView === 'mindmap' && (
+            <div className="w-full h-full flex">
+              <main className="flex-1 flex flex-col relative overflow-hidden min-w-0">
+                <MindmapCanvas nodes={nodes} links={links} scale={scale} currentTheme={currentTheme} selectedNode={selectedNode} expandedIds={expandedIds} onSelect={selectAndCenter} onToggle={id => setExpandedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })} />
+              </main>
+
+              {selectedNode && hasSearchResult && showWikiPanel && (
+                <aside style={{ width: infoPanelWidth }} className={`shrink-0 border-l backdrop-blur-xl z-20 flex flex-col relative ${isDark ? 'bg-black/40 border-white/5' : 'bg-white/90 border-slate-200'}`}>
+                  {/* Resize Handle */}
+                  <div
+                    onMouseDown={handleInfoResize}
+                    className={`absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-30 transition-colors ${isDark ? 'hover:bg-blue-400/30' : 'hover:bg-blue-500/30'}`}
+                  />
+                  <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="flex flex-col animate-in fade-in duration-300">
+                      <WikiPanel wikiData={wikiData} isLoading={isWikiLoading} theme={currentTheme} />
+                      <div className="px-6 pb-6 space-y-4">
+                        <EurostatPanel node={selectedNode} currentTheme={currentTheme} />
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+              )}
             </div>
           )}
-        </header>
 
-        {/* Content Row */}
-        <div className="flex-1 flex min-h-0 relative">
-          <main className="flex-1 flex flex-col relative overflow-hidden">
-            <MindmapCanvas nodes={nodes} links={links} scale={scale} currentTheme={currentTheme} selectedNode={selectedNode} expandedIds={expandedIds} onSelect={selectAndCenter} onToggle={id => setExpandedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; })} />
-          </main>
+          {/* === DOKUMENT TAB: Fullscreen PDF === */}
+          {contentView === 'pdf' && (
+            <div className="w-full h-full flex flex-col animate-in fade-in duration-300">
+              <iframe
+                src="/media/Germany_NUTS_Regional_Typology.pdf"
+                className="w-full h-full border-none"
+                title="PDF Viewer"
+              />
+            </div>
+          )}
 
-          {/* Right Sidebar Body */}
-          {selectedNode && hasSearchResult && showWikiPanel && (
-            <aside className={`w-[400px] border-l backdrop-blur-xl z-20 shrink-0 flex flex-col ${isDark ? 'bg-black/40 border-white/5' : 'bg-white/80 border-slate-200'}`}>
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {activeTab === 'info' && (
-                  <div className="flex flex-col animate-in fade-in duration-300">
-                    <WikiPanel wikiData={wikiData} isLoading={isWikiLoading} theme={currentTheme} />
-                    <div className="px-6 pb-6 space-y-4">
-                      <EurostatPanel node={selectedNode} currentTheme={currentTheme} />
-                    </div>
+          {/* === AUDIO TAB: Fullscreen Audio === */}
+          {contentView === 'audio' && (
+            <div className="w-full h-full overflow-y-auto custom-scrollbar">
+              <div className="p-6 flex flex-col gap-6 animate-in zoom-in-95 duration-500 max-w-2xl mx-auto">
+                <div className="flex flex-col items-center gap-4 py-4 shrink-0">
+                  <div className={`w-32 h-32 rounded-[2rem] ${isDark ? 'bg-blue-500/20 shadow-[0_0_40px_rgba(59,130,246,0.2)]' : 'bg-blue-50 shadow-lg'} flex items-center justify-center`}>
+                    <span className="text-5xl">🎧</span>
                   </div>
-                )}
-
-                {activeTab === 'pdf' && (
-                  <div className="h-full flex flex-col animate-in fade-in duration-300">
-                    <iframe
-                      src="/media/Germany_NUTS_Regional_Typology.pdf"
-                      className="w-full h-full border-none shadow-2xl"
-                      title="PDF Viewer"
-                    />
+                  <div className="text-center space-y-1">
+                    <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Audio Research</h3>
+                    <p className="text-[10px] text-blue-500 font-bold uppercase">Team ET1 Exclusive</p>
                   </div>
-                )}
+                </div>
 
-                {activeTab === 'audio' && (
-                  <div className="p-6 h-full flex flex-col gap-6 animate-in zoom-in-95 duration-500 overflow-y-auto custom-scrollbar">
-                    <div className="flex flex-col items-center gap-4 py-4 shrink-0">
-                      <div className={`w-32 h-32 rounded-[2rem] ${isDark ? 'bg-blue-500/20 shadow-[0_0_40px_rgba(59,130,246,0.2)]' : 'bg-blue-50 shadow-lg'} flex items-center justify-center`}>
-                        <span className="text-5xl">🎧</span>
-                      </div>
-                      <div className="text-center space-y-1">
-                        <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>Audio Research</h3>
-                        <p className="text-[10px] text-blue-500 font-bold uppercase">Team ET1 Exclusive</p>
-                      </div>
-                    </div>
-
-                    {/* Playlist Selection */}
-                    <div className="space-y-2 shrink-0">
-                      <h4 className="text-[9px] font-black uppercase opacity-40 px-2 tracking-widest">Playlist</h4>
-                      <div className="flex flex-col gap-1.5">
-                        {podcasts.map((pod, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => setCurrentPodcast(pod)}
-                            className={`p-3 rounded-2xl text-left transition-all border flex items-center gap-3 ${currentPodcast.file === pod.file
-                              ? 'bg-blue-500/10 border-blue-500/30 shadow-sm'
-                              : `bg-transparent border-transparent hover:bg-white/5 opacity-60 hover:opacity-100 ${isDark ? '' : 'hover:bg-slate-50'}`
-                              }`}
-                          >
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${currentPodcast.file === pod.file ? 'bg-blue-500 text-white' : 'bg-slate-500/20 text-xs'}`}>
-                              {currentPodcast.file === pod.file ? '▶' : idx + 1}
-                            </div>
-                            <span className="text-[10px] font-bold leading-tight uppercase tracking-tight">{pod.title}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Player Card */}
-                    <div className={`mt-auto p-5 rounded-[2rem] ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-slate-200 shadow-xl'} space-y-4 shrink-0`}>
-                      <div className="space-y-1 px-1">
-                        <div className="text-[8px] font-black opacity-30 uppercase tracking-tighter">Now Playing</div>
-                        <div className="text-[10px] font-black leading-tight uppercase truncate">{currentPodcast.title}</div>
-                      </div>
-
-                      <audio key={currentPodcast.file} controls autoPlay className="w-full h-8 brightness-90 contrast-125">
-                        <source src={`/media/${currentPodcast.file}`} type="audio/mp4" />
-                        Dein Browser unterstützt diesen Player nicht.
-                      </audio>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center px-1">
-                          <span className="text-[8px] font-black opacity-30 uppercase tracking-tighter">Quality: 320kbps</span>
-                          <span className="text-[8px] font-black text-blue-500 uppercase">Stereo</span>
+                <div className="space-y-2 shrink-0">
+                  <h4 className="text-[9px] font-black uppercase opacity-40 px-2 tracking-widest">Playlist</h4>
+                  <div className="flex flex-col gap-1.5">
+                    {podcasts.map((pod, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCurrentPodcast(pod)}
+                        className={`p-3 rounded-2xl text-left transition-all border flex items-center gap-3 ${currentPodcast.file === pod.file
+                          ? 'bg-blue-500/10 border-blue-500/30 shadow-sm'
+                          : `bg-transparent border-transparent hover:bg-white/5 opacity-60 hover:opacity-100 ${isDark ? '' : 'hover:bg-slate-50'}`
+                          }`}
+                      >
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${currentPodcast.file === pod.file ? 'bg-blue-500 text-white' : 'bg-slate-500/20 text-xs'}`}>
+                          {currentPodcast.file === pod.file ? '▶' : idx + 1}
                         </div>
-                        <div className={`h-1 w-full rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'} overflow-hidden`}>
-                          <div className="h-full w-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
-                        </div>
-                      </div>
-                    </div>
+                        <span className="text-[10px] font-bold leading-tight uppercase tracking-tight">{pod.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-                    <div className="opacity-25 text-[7px] font-black text-center uppercase tracking-[0.4em] mb-2">
-                      Media Source: European Commission Archives
+                <div className={`mt-auto p-5 rounded-[2rem] ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-slate-200 shadow-xl'} space-y-4 shrink-0`}>
+                  <div className="space-y-1 px-1">
+                    <div className="text-[8px] font-black opacity-30 uppercase tracking-tighter">Now Playing</div>
+                    <div className="text-[10px] font-black leading-tight uppercase truncate">{currentPodcast.title}</div>
+                  </div>
+                  <audio key={currentPodcast.file} controls autoPlay className="w-full h-8 brightness-90 contrast-125">
+                    <source src={`/media/${currentPodcast.file}`} type="audio/mp4" />
+                    Dein Browser unterstützt diesen Player nicht.
+                  </audio>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-[8px] font-black opacity-30 uppercase tracking-tighter">Quality: 320kbps</span>
+                      <span className="text-[8px] font-black text-blue-500 uppercase">Stereo</span>
+                    </div>
+                    <div className={`h-1 w-full rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'} overflow-hidden`}>
+                      <div className="h-full w-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
                     </div>
                   </div>
-                )}
+                </div>
+
+                <div className="opacity-25 text-[7px] font-black text-center uppercase tracking-[0.4em] mb-2">
+                  Media Source: European Commission Archives
+                </div>
               </div>
-            </aside>
+            </div>
           )}
         </div>
       </div>
